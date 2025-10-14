@@ -9,6 +9,18 @@ class UserCreate(BaseModel):
     password: str
     name: Optional[str] = None
 
+
+
+class Share(BaseModel):
+    user_id: int
+    amount: Decimal
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: Optional[str] = None
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -30,9 +42,26 @@ class GroupOut(BaseModel):
     class Config:
         orm_mode = True
 
+
+
+
+class SettlementCreate(BaseModel):
+    from_user_id: int
+    to_user_id: int
+    amount: Decimal
+# schemas.py
+
+# ... add this at the end of the file
+class AddMemberRequest(BaseModel):
+    email: EmailStr
+
+
+
+
 class ExpenseCreate(BaseModel):
     payer_id: int
     amount: Decimal
     description: Optional[str] = ""
-    participants: List[int]  # IDs
+    #participants: List[int]  # IDs
+    shares: List[Share]
     # shares optional: mapping user_id -> amount (not implemented in UI yet)

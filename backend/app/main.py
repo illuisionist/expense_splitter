@@ -5,6 +5,8 @@ from .db import engine
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+from typing import List # Make sure this is imported
+from decimal import Decimal
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -37,21 +39,100 @@ def create_group(g: schemas.GroupCreate, current_user = Depends(auth.get_current
     group = crud.create_group(db_session, name=g.name, owner_id=current_user.id)
     return group
 
+
+# main.py
+# ... other endpoints ...
+
+@app.delete("/groups/{group_id}")
+def delete_group(group_id: int, current_user: models.User = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
+    group = db_session.query(models.Group).filter(models.Group.id == group_id).first()
+
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Security check: Only the owner can delete the group
+    if group.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You do not have permission to delete this group")
+
+    crud.delete_group_by_id(db_session, group_id=group_id)
+    
+    return {"status": "ok", "detail": "Group and all its expenses have been deleted."}
+
+@app.post("/groups/{group_id}/settle")
+def record_settlement(group_id: int, payload: schemas.SettlementCreate, current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
+    # Security check: Ensure the person recording the payment is the one making the payment
+    if current_user.id != payload.from_user_id:
+        raise HTTPException(status_code=403, detail="You can only record payments made by yourself.")
+
+    from_user = crud.get_user(db_session, payload.from_user_id)
+    to_user = crud.get_user(db_session, payload.to_user_id)
+    if not from_user or not to_user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    description = f"Settlement: {from_user.name or from_user.email} paid {to_user.name or to_user.email}"
+    
+
+    settlement_share = schemas.Share(user_id=payload.to_user_id, amount=payload.amount)
+    
+    # The call to create_expense now uses the 'shares' keyword argument.
+    exp = crud.create_expense(
+        db=db_session,
+        group_id=group_id,
+        payer_id=payload.from_user_id,
+        amount=payload.amount,
+        description=description,
+        shares=[settlement_share]  # Pass a list containing our single share object
+    )
+    # --- MODIFICATION END ---
+    
+    return {"status": "ok", "expense_id": exp.id}
+
+# main.py
+
 @app.get("/groups")
 def my_groups(current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
-    groups = crud.get_groups_for_user(db_session, current_user.id)
-    return groups
+    groups_query = crud.get_groups_for_user(db_session, current_user.id)
+    
+    # Create a custom response to include owner's name
+    result = []
+    for group in groups_query:
+        owner = crud.get_user(db_session, group.owner_id)
+        result.append({
+            "id": group.id,
+            "name": group.name,
+            "owner_id": group.owner_id,
+            "owner_name": owner.name if owner else "Unknown"
+        })
+    return result
 
 @app.post("/groups/{group_id}/expenses")
 def add_expense(group_id: int, payload: schemas.ExpenseCreate, current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
-    # basic membership check (simplified)
-    members = [m.user_id for m in db_session.query(models.GroupMember).filter(models.GroupMember.group_id==group_id).all()]
-    if payload.payer_id not in members:
+    # --- ADD VALIDATION ---
+    # Check if the sum of individual shares equals the total expense amount
+    total_shares = sum(s.amount for s in payload.shares)
+    if total_shares != payload.amount:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"The sum of shares ({total_shares}) does not match the total expense amount ({payload.amount})."
+        )
+
+    # Basic membership check (simplified)
+    members_ids = [m.user_id for m in db_session.query(models.GroupMember).filter(models.GroupMember.group_id==group_id).all()]
+    if payload.payer_id not in members_ids:
         raise HTTPException(status_code=400, detail="Payer must be a member of the group")
-    for u in payload.participants:
-        if u not in members:
-            raise HTTPException(status_code=400, detail="All participants must be group members")
-    exp = crud.create_expense(db_session, group_id=group_id, payer_id=payload.payer_id, amount=payload.amount, description=payload.description, participants=payload.participants)
+    for s in payload.shares:
+        if s.user_id not in members_ids:
+            raise HTTPException(status_code=400, detail=f"Participant with ID {s.user_id} is not a group member")
+    
+    # The function call is updated to pass the 'shares' payload
+    exp = crud.create_expense(
+        db_session, 
+        group_id=group_id, 
+        payer_id=payload.payer_id, 
+        amount=payload.amount, 
+        description=payload.description, 
+        shares=payload.shares
+    )
     return {"status":"ok", "expense_id": exp.id}
 
 @app.get("/groups/{group_id}/balances")
@@ -67,6 +148,50 @@ def group_balances(group_id: int, current_user = Depends(auth.get_current_user),
         user = crud.get_user(db_session, uid)
         result.append({"user_id": uid, "email": user.email if user else None, "name": user.name if user else None, "balance": round(bal,2)})
     return result
+
+# main.py
+
+# ... other endpoints ...
+
+@app.post("/groups/{group_id}/members")
+def add_group_member(group_id: int, payload: schemas.AddMemberRequest, current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
+    """Adds a new member to a group."""
+    group = db_session.query(models.Group).filter(models.Group.id == group_id).first()
+
+    # Security check: Only the group owner can add new members
+    if not group or group.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the group owner can add members")
+
+    # Find the user to add
+    user_to_add = crud.get_user_by_email(db_session, email=payload.email)
+    if not user_to_add:
+        raise HTTPException(status_code=404, detail="User with that email not found")
+    
+    # Add the member using the existing CRUD function
+    crud.add_member(db_session, group_id=group_id, user_id=user_to_add.id)
+    
+    return {"status": "ok", "detail": f"User {payload.email} added to the group."}
+
+# ... rest of the endpoints ...
+
+# main.py
+# ... other imports ...
+
+# ... other endpoints ...
+
+@app.get("/groups/{group_id}/members", response_model=List[schemas.UserOut])
+def get_group_members(group_id: int, current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):
+    """Endpoint to get all members of a group."""
+    # Security check: ensure the current user is a member of the group they're querying
+    member_ids = [m.user_id for m in db_session.query(models.GroupMember).filter(models.GroupMember.group_id==group_id).all()]
+    if current_user.id not in member_ids:
+        raise HTTPException(status_code=403, detail="Not a group member")
+    
+    members = crud.get_members_of_group(db_session, group_id)
+    return members
+
+
+
 
 @app.get("/groups/{group_id}/settlement")
 def settlement_plan(group_id: int, current_user = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):

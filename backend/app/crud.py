@@ -1,6 +1,6 @@
 # crud.py
 from sqlalchemy.orm import Session
-from . import models
+from . import models, schemas 
 from decimal import Decimal
 from datetime import datetime
 
@@ -42,22 +42,49 @@ def add_member(db: Session, group_id: int, user_id: int):
     db.refresh(gm)
     return gm
 
-def create_expense(db: Session, group_id: int, payer_id: int, amount: Decimal, description: str, participants: list[int]):
+def create_expense(db: Session, group_id: int, payer_id: int, amount: Decimal, description: str, shares: list[schemas.Share]):
     exp = models.Expense(group_id=group_id, payer_id=payer_id, amount=amount, description=description, date=datetime.utcnow())
     db.add(exp)
     db.commit()
     db.refresh(exp)
-    # equal split
-    n = len(participants)
-    share = (amount / Decimal(n)).quantize(Decimal("0.01"))
-    for u in participants:
-        es = models.ExpenseShare(expense_id=exp.id, user_id=u, share=share)
+    
+    # OLD logic for equal split is removed.
+    # NEW: Iterate through the provided shares and save them directly.
+    for s in shares:
+        es = models.ExpenseShare(expense_id=exp.id, user_id=s.user_id, share=s.amount)
         db.add(es)
     db.commit()
     return exp
 
 def list_expenses_for_group(db: Session, group_id: int):
     return db.query(models.Expense).filter(models.Expense.group_id==group_id).all()
+
+
+# crud.py
+# ... other functions ...
+
+def delete_group_by_id(db: Session, group_id: int):
+    # Find all expenses related to the group
+    expenses_to_delete = db.query(models.Expense).filter(models.Expense.group_id == group_id).all()
+    expense_ids = [e.id for e in expenses_to_delete]
+
+    # 1. Delete all expense shares for those expenses
+    if expense_ids:
+        db.query(models.ExpenseShare).filter(models.ExpenseShare.expense_id.in_(expense_ids)).delete(synchronize_session=False)
+
+    # 2. Delete all the expenses
+    db.query(models.Expense).filter(models.Expense.id.in_(expense_ids)).delete(synchronize_session=False)
+
+    # 3. Delete all group memberships
+    db.query(models.GroupMember).filter(models.GroupMember.group_id == group_id).delete(synchronize_session=False)
+
+    # 4. Delete the group itself
+    db.query(models.Group).filter(models.Group.id == group_id).delete(synchronize_session=False)
+
+    db.commit()
+
+
+
 
 def compute_balances(db: Session, group_id: int):
     # returns dict user_id -> Decimal (positive: to receive, negative: owes)
@@ -73,3 +100,14 @@ def compute_balances(db: Session, group_id: int):
         balances[e.payer_id] += total_shares
     # convert to regular dict
     return {k: float(v) for k,v in balances.items()}
+
+
+
+# crud.py
+
+# ... other functions ...
+
+def get_members_of_group(db: Session, group_id: int):
+    """Gets all users who are members of a specific group."""
+    return db.query(models.User).join(models.GroupMember, models.User.id == models.GroupMember.user_id)\
+        .filter(models.GroupMember.group_id == group_id).all()
