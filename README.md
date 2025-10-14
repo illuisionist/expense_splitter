@@ -25,19 +25,7 @@ A full-stack web application built with a FastAPI backend and a Streamlit fronte
 - **Frontend**: Streamlit
 - **Version Control**: Git & GitHub
 
-## 📁 Project Structure
-expense-splitter/
-|-- backend/
-|   |-- app/
-|   |   |-- init.py
-|   |   |-- auth.py
-|   |   |-- crud.py
-|   |   |-- db.py
-|   |   |-- main.py
-|   |   |-- models.py
-|   |   -- schemas.py |   -- expenses.db   # (Should be in .gitignore)
-|-- frontend/
-|   -- app.py |-- .gitignore -- README.md
+
 
 ## 🚀 Getting Started
 
@@ -134,3 +122,21 @@ Follow these instructions to get a copy of the project up and running on your lo
 - `POST /groups/{group_id}/settle`: Record a payment between members.
 
 </details>
+
+## 📁 Project Structure
+```text
+expense-splitter/
+|-- backend/
+|   |-- app/
+|   |   |-- __init__.py
+|   |   |-- auth.py
+|   |   |-- crud.py
+|   |   |-- db.py
+|   |   |-- main.py
+|   |   |-- models.py
+|   |   `-- schemas.py
+|   `-- expenses.db  (Note: Should be in .gitignore)
+|-- frontend/
+|   `-- app.py
+|-- .gitignore
+`-- README.md
