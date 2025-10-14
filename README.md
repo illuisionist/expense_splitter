@@ -26,21 +26,22 @@ A full-stack web application built with a FastAPI backend and a Streamlit fronte
 - **Version Control**: Git & GitHub
 
 ## 📁 Project Structure
+```text
 expense-splitter/
-├── backend/
-│   ├── app/
-│   │   ├── init.py
-│   │   ├── auth.py
-│   │   ├── crud.py
-│   │   ├── db.py
-│   │   ├── main.py
-│   │   ├── models.py
-│   │   └── schemas.py
-│   └── expenses.db  (Note: Should be in .gitignore)
-├── frontend/
-│   └── app.py
-├── .gitignore
-└── README.md
+|-- backend/
+|   |-- app/
+|   |   |-- __init__.py
+|   |   |-- auth.py
+|   |   |-- crud.py
+|   |   |-- db.py
+|   |   |-- main.py
+|   |   |-- models.py
+|   |   `-- schemas.py
+|   `-- expenses.db  (Note: Should be in .gitignore)
+|-- frontend/
+|   `-- app.py
+|-- .gitignore
+`-- README.md
 
 ## 🚀 Getting Started
 
@@ -48,7 +49,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Git
 
 ### Installation & Setup
