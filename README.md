@@ -33,7 +33,7 @@ Follow these instructions to get a copy of the project up and running on your lo
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - Git
 
 ### Installation & Setup
