@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from typing import List # Make sure this is imported
 from decimal import Decimal
+from typing import List
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -40,8 +41,19 @@ def create_group(g: schemas.GroupCreate, current_user = Depends(auth.get_current
     return group
 
 
-# main.py
-# ... other endpoints ...
+@app.get("/groups/{group_id}/users/{user_id}/history", response_model=List[schemas.TransactionHistoryItem])
+def get_user_transaction_history(
+    group_id: int, 
+    user_id: int, 
+    current_user: models.User = Depends(auth.get_current_user), 
+    db_session: Session = Depends(auth.get_db)
+):
+    # Security check: ensure the current user is a member of the group
+    member_ids = [m.user_id for m in db_session.query(models.GroupMember).filter(models.GroupMember.group_id == group_id).all()]
+    if current_user.id not in member_ids:
+        raise HTTPException(status_code=403, detail="Not a group member")
+        
+    return crud.get_transaction_history_for_user(db_session, group_id=group_id, user_id=user_id)
 
 @app.delete("/groups/{group_id}")
 def delete_group(group_id: int, current_user: models.User = Depends(auth.get_current_user), db_session: Session = Depends(auth.get_db)):

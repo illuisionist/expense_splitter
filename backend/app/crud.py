@@ -83,7 +83,47 @@ def delete_group_by_id(db: Session, group_id: int):
 
     db.commit()
 
+# In backend/app/crud.py
 
+# ... other functions ...
+
+def get_transaction_history_for_user(db: Session, group_id: int, user_id: int):
+    history = []
+    
+    # Get all expenses the user paid for in this group (CREDITS)
+    expenses_paid = db.query(models.Expense).filter(
+        models.Expense.group_id == group_id,
+        models.Expense.payer_id == user_id
+    ).all()
+    
+    for exp in expenses_paid:
+        history.append({
+            "date": exp.date,
+            "description": exp.description,
+            "type": "PAID",
+            "amount": float(exp.amount)
+        })
+        
+    # Get all expense shares the user was responsible for in this group (DEBITS)
+    shares_owed = db.query(models.ExpenseShare).join(models.Expense).filter(
+        models.Expense.group_id == group_id,
+        models.ExpenseShare.user_id == user_id
+    ).all()
+
+    for share in shares_owed:
+        # Fetch the parent expense to get the description
+        expense = db.query(models.Expense).filter(models.Expense.id == share.expense_id).first()
+        history.append({
+            "date": expense.date,
+            "description": expense.description,
+            "type": "OWED",
+            "amount": -float(share.share) # Show shares as negative values
+        })
+        
+    # Sort the combined history by date, newest first
+    history.sort(key=lambda x: x['date'], reverse=True)
+    
+    return history
 
 
 def compute_balances(db: Session, group_id: int):

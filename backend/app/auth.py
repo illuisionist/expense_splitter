@@ -12,12 +12,12 @@ SECRET_KEY = "change-this-secret-to-a-strong-one"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60*24*7  # 7 days
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 def get_password_hash(password: str):
-    safe_password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.hash(safe_password)
+    #safe_password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
+    return pwd_context.hash(password)
 
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)

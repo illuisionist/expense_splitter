@@ -42,6 +42,11 @@ class GroupOut(BaseModel):
     class Config:
         orm_mode = True
 
+class TransactionHistoryItem(BaseModel):
+    date: datetime
+    description: str
+    type: str  # e.g., 'PAID' or 'OWED'
+    amount: float
 
 
 
